@@ -86,7 +86,7 @@
                                             </svg>
                                         </button>
                                         <!-- Delete -->
-                                        <button @click="deletePhoto(img.id)"
+                                        <button @click="deletePhoto(img.historyId)"
                                             class="w-7 h-7 rounded-lg bg-red-500/10 hover:bg-red-500/25 text-red-400 hover:text-red-300 flex items-center justify-center transition-colors"
                                             title="Delete photo">
                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor"
@@ -99,9 +99,9 @@
                                 </div>
 
                                 <!-- Inline rename input (shown when editing) -->
-                                <div x-show="renamingId === img.id" @click.stop class="px-2.5 pb-2.5">
+                                <div x-show="renamingId === img.historyId" @click.stop class="px-2.5 pb-2.5">
                                     <div class="flex gap-2">
-                                        <input type="text" :id="'rename-' + img.id" x-model="renameValue"
+                                        <input type="text" :id="'rename-' + img.historyId" x-model="renameValue"
                                             @keydown.enter="commitRename(img)" @keydown.escape="cancelRename"
                                             class="flex-1 bg-slate-800 border border-blue-500 rounded-lg px-2 py-1.5 text-white text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                                             placeholder="Enter a display name…">
@@ -333,17 +333,18 @@
                 ],
 
                 init() {
-                    // Filter out hidden photo IDs from localStorage
-                    let hiddenIds = JSON.parse(localStorage.getItem('hiddenPrintPhotos') || '[]');
-                    this.photos = this.photos.filter(p => !hiddenIds.includes(p.id));
+                    // Filter out hidden history IDs from localStorage (keyed by historyId, unique per version)
+                    let hiddenIds = JSON.parse(localStorage.getItem('hiddenPrintHistories') || '[]');
+                    this.photos = this.photos.filter(p => !hiddenIds.includes(p.historyId));
 
                     this.activePaper = this.papers[0];
 
                     if (this.preSelectedId) {
-                        // Find the LATEST history entry for this image_id (last in the photos array
-                        // because PrintController orders histories asc, so latest is last)
+                        // Find the slot with the highest latestHistoryDbId for this image
+                        // (= the group that was most recently edited, regardless of array order)
                         const candidates = this.photos.filter(p => p.id == this.preSelectedId);
-                        const latest = candidates[candidates.length - 1];
+                        const latest = candidates.reduce((best, p) =>
+                            (!best || p.latestHistoryDbId > best.latestHistoryDbId) ? p : best, null);
                         if (latest && !this.isInQueue(latest.historyId)) {
                             this.addToQueue(latest);
                         }
@@ -363,19 +364,19 @@
                 clearQueue() { this.queue = []; },
                 addAll() { this.photos.forEach(p => { if (!this.isInQueue(p.historyId)) this.addToQueue(p); }); },
 
-                // ─── Hide photo from library (Local only) ──────────────
-                deletePhoto(id) {
+                // ─── Hide photo from library (Local only, per version) ──────────────
+                deletePhoto(historyId) {
                     if (!confirm('Remove this photo from the library view? (The original photo will NOT be deleted from your dashboard)')) return;
-                    // Remove from queue if present (by ID because we hide all versions of this ID from library)
-                    this.queue = this.queue.filter(e => e.photo.id !== id);
-                    // Remove from library view locally
-                    this.photos = this.photos.filter(p => p.id !== id);
+                    // Remove only this specific version from the queue
+                    this.queue = this.queue.filter(e => e.photo.historyId !== historyId);
+                    // Remove only this specific version from the library
+                    this.photos = this.photos.filter(p => p.historyId !== historyId);
 
-                    // Save to localStorage so it persists across reloads
-                    let hiddenIds = JSON.parse(localStorage.getItem('hiddenPrintPhotos') || '[]');
-                    if (!hiddenIds.includes(id)) {
-                        hiddenIds.push(id);
-                        localStorage.setItem('hiddenPrintPhotos', JSON.stringify(hiddenIds));
+                    // Save to localStorage so it persists across reloads (keyed by historyId)
+                    let hiddenIds = JSON.parse(localStorage.getItem('hiddenPrintHistories') || '[]');
+                    if (!hiddenIds.includes(historyId)) {
+                        hiddenIds.push(historyId);
+                        localStorage.setItem('hiddenPrintHistories', JSON.stringify(hiddenIds));
                     }
 
                     window.dispatchEvent(new CustomEvent('notify', { detail: { message: 'Photo removed from print library.', type: 'success' } }));
@@ -383,10 +384,10 @@
 
                 // ─── Rename photo ─────────────────────────────────────
                 startRename(img) {
-                    this.renamingId = img.id;
+                    this.renamingId = img.historyId;
                     this.renameValue = img.displayName || img.name;
                     this.$nextTick(() => {
-                        const el = document.getElementById('rename-' + img.id);
+                        const el = document.getElementById('rename-' + img.historyId);
                         if (el) { el.focus(); el.select(); }
                     });
                 },

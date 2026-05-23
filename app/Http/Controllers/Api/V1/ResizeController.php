@@ -32,8 +32,8 @@ class ResizeController extends Controller
             'maintain_ratio' => 'boolean',
             'preset' => 'nullable|string',
             'quality' => 'integer|min:1|max:100',
-            'crop_x' => 'nullable|integer|min:0',
-            'crop_y' => 'nullable|integer|min:0',
+            'crop_x' => 'nullable|integer',
+            'crop_y' => 'nullable|integer',
             'crop_width' => 'nullable|integer|min:1',
             'crop_height' => 'nullable|integer|min:1',
         ]);

@@ -8,7 +8,7 @@ return [
         'malicious_extensions' => ['php', 'phtml', 'exe', 'sh', 'bat', 'js'],
     ],
     'rate_limits' => [
-        'api_upload' => 60,
-        'api_editor' => 120,
+        'api_upload' => 300,
+        'api_editor' => 500,
     ]
 ];

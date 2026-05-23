@@ -53,6 +53,32 @@ class ImageController extends Controller
         }
     }
 
+    public function batchUpload(Request $request)
+    {
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'images'   => ['required', 'array', 'min:1', 'max:20'],
+            'images.*' => ['file', 'mimes:jpeg,jpg,png,webp,gif', 'max:10240'],
+        ]);
+
+        if ($validator->fails()) {
+            return $this->errorResponse('Validation failed', $validator->errors()->first(), 422);
+        }
+
+        $results = ['success' => [], 'failed' => []];
+
+        foreach ($request->file('images') as $index => $file) {
+            try {
+                $dto   = $this->uploadService->upload($file);
+                $image = $this->repository->save($request->user()->id, $dto->toArray());
+                $results['success'][] = new ImageResource($image);
+            } catch (\Exception $e) {
+                $results['failed'][] = ['index' => $index, 'error' => $e->getMessage()];
+            }
+        }
+
+        return $this->successResponse($results, count($results['success']) . ' image(s) uploaded.', 201);
+    }
+
     public function history(Request $request)
     {
         $histories = $request->user()->imageHistories()->with('image')->latest()->paginate(15);

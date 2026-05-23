@@ -50,10 +50,9 @@ class ResizeController extends Controller
             abort(403, 'Unauthorized');
         }
 
-        // When a user opens the editor, they are starting a new edit session on the original photo.
-        // Wipe any previous edited_path so it doesn't conflict or load an already-cropped image.
+        // Always start editor from the original photo — each Edit session is fresh.
+        // The edit history and print library entries are preserved in image_histories.
         if ($image->edited_path) {
-            // We do NOT delete the physical file because we want it to be available in the Print Queue history!
             $image->update(['edited_path' => null]);
         }
 

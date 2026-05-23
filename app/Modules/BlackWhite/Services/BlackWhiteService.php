@@ -29,8 +29,13 @@ class BlackWhiteService
         $img = $manager->read($absolutePath);
         $img->orient();
 
-        // Apply Intensity (simulated with opacity or mixing original, but v3 core greyscale is just greyscale)
-        // If intensity < 100, we might need a more advanced mix, but we'll stick to full greyscale for simplicity or use blend.
+        // Capture dimensions AFTER orient() but BEFORE any pixel operation.
+        // Prefer the model's width/height (authoritative — set by ResizeService after last crop/scale)
+        // so the print page always shows the intended print size, not the raw file size.
+        // Fall back to reading from the Intervention Image object only when the model has no dimensions.
+        $recordedWidth  = $image->width  ?? $img->width();
+        $recordedHeight = $image->height ?? $img->height();
+
         $img->greyscale();
 
         if ($dto->brightness !== 0) {
@@ -61,13 +66,14 @@ class BlackWhiteService
             'edited_path' => $editedRelativePath,
         ]);
 
-        // Log history
         $this->historyService->log($image->id, 'black_white_converted', [
-            'intensity' => $dto->intensity,
-            'brightness' => $dto->brightness,
-            'contrast' => $dto->contrast,
-            'sharpen' => $dto->sharpen,
-            'generated_path' => $editedRelativePath
+            'width'          => $recordedWidth,
+            'height'         => $recordedHeight,
+            'intensity'      => $dto->intensity,
+            'brightness'     => $dto->brightness,
+            'contrast'       => $dto->contrast,
+            'sharpen'        => $dto->sharpen,
+            'generated_path' => $editedRelativePath,
         ]);
 
         return $image;

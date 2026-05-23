@@ -52,13 +52,14 @@ class ResizeService
         ]);
 
         if ($dto->cropWidth && $dto->cropHeight) {
+            // Clamp crop box to image boundaries (CropperJS can return negative offsets)
+            $cropX = max(0, $dto->cropX ?? 0);
+            $cropY = max(0, $dto->cropY ?? 0);
+            $cropW = min($dto->cropWidth, $img->width() - $cropX);
+            $cropH = min($dto->cropHeight, $img->height() - $cropY);
+
             // 1. Crop exactly as the user drew the crop box in CropperJS
-            $img->crop(
-                $dto->cropWidth,
-                $dto->cropHeight,
-                $dto->cropX ?? 0,
-                $dto->cropY ?? 0
-            );
+            $img->crop($cropW, $cropH, $cropX, $cropY);
 
             // 2. Only scale to target dimensions if a preset/custom size was chosen.
             //    Use scale() (not resize()) so the image is resampled at high quality
