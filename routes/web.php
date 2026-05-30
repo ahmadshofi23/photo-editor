@@ -10,6 +10,30 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::get('/debug-rembg-image/{id}', function ($id) {
+    $image = \App\Models\Image::find($id);
+    if (!$image) return response()->json(['error' => 'not found']);
+
+    $sourcePath   = $image->edited_path ?? $image->original_path;
+    $absolutePath = \Illuminate\Support\Facades\Storage::disk('public')->path($sourcePath);
+    $outputPath   = \Illuminate\Support\Facades\Storage::disk('public')->path('uploads/processed/test_' . $id . '.png');
+
+    \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('uploads/processed');
+
+    $start = microtime(true);
+    $cmd   = "U2NET_HOME='/opt/rembg-models' /usr/local/bin/rembg i " . escapeshellarg($absolutePath) . " " . escapeshellarg($outputPath) . " 2>&1";
+    exec($cmd, $output, $exit);
+    $elapsed = round(microtime(true) - $start, 2);
+
+    return response()->json([
+        'input_exists'  => file_exists($absolutePath),
+        'output_exists' => file_exists($outputPath),
+        'exit_code'     => $exit,
+        'elapsed_sec'   => $elapsed,
+        'output'        => implode("\n", $output),
+    ]);
+});
+
 Route::get('/debug-image/{id}', function ($id) {
     $image = \App\Models\Image::find($id);
     if (!$image) return response()->json(['error' => 'Image not found in DB']);
