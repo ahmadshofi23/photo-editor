@@ -37,24 +37,43 @@ class RemoveBackgroundService
 
         Storage::disk('public')->makeDirectory('uploads/processed');
 
+        [$origW, $origH] = @getimagesize($absolutePath) ?: [0, 0];
+        $needsResize = ($origW > self::MAX_REMBG_SIZE || $origH > self::MAX_REMBG_SIZE);
+
         // Resize gambar dulu jika terlalu besar agar tidak OOM di server
-        $rembgInput = $this->prepareResizedInput($absolutePath);
+        $rembgInput  = $needsResize ? $this->prepareResizedInput($absolutePath) : $absolutePath;
+        $rembgOutput = $needsResize
+            ? sys_get_temp_dir() . '/rembg_out_' . uniqid() . '.png'
+            : $editedAbsPath;
 
         $inputEscaped  = escapeshellarg($rembgInput);
-        $outputEscaped = escapeshellarg($editedAbsPath);
+        $outputEscaped = escapeshellarg($rembgOutput);
         $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
         $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " $rembgBin i -m u2netp $inputEscaped $outputEscaped 2>&1";
 
         exec($cmd, $output, $exitCode);
 
-        // Hapus file temporary resize jika ada
         if ($rembgInput !== $absolutePath && file_exists($rembgInput)) {
             @unlink($rembgInput);
         }
 
-        if ($exitCode !== 0 || !file_exists($editedAbsPath)) {
+        if ($exitCode !== 0 || !file_exists($rembgOutput)) {
             $detail = implode(' ', $output);
             throw new \RuntimeException('Gagal menghapus latar: ' . $detail);
+        }
+
+        // Jika di-resize, upscale mask alpha kembali ke ukuran original menggunakan ImageMagick
+        if ($needsResize && $origW > 0) {
+            $resizeCmd = 'convert ' . escapeshellarg($rembgOutput)
+                . ' -resize ' . (int)$origW . 'x' . (int)$origH . '!'
+                . ' ' . escapeshellarg($editedAbsPath) . ' 2>&1';
+            exec($resizeCmd, $resizeOut, $resizeExit);
+            @unlink($rembgOutput);
+
+            if ($resizeExit !== 0 || !file_exists($editedAbsPath)) {
+                // Fallback: pakai hasil kecil jika upscale gagal
+                rename($rembgOutput, $editedAbsPath);
+            }
         }
 
         [$width, $height] = @getimagesize($editedAbsPath) ?: [$image->width, $image->height];

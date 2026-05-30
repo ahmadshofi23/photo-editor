@@ -46,7 +46,7 @@ RUN mkdir -p storage/framework/cache/data \
              bootstrap/cache
 
 # Tambahkan baris ini di dalam Dockerfile untuk menaikkan limit upload PHP
-RUN echo "upload_max_filesize = 20M\npost_max_size = 20M" > /usr/local/etc/php/conf.d/uploads.ini
+RUN echo "upload_max_filesize = 20M\npost_max_size = 20M\nmemory_limit = 512M\nmax_execution_time = 180" > /usr/local/etc/php/conf.d/uploads.ini
 
 # Mengatur hak milik dan izin akses (read/write) secara penuh untuk folder storage dan cache
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/public \
