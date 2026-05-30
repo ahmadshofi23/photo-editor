@@ -19,7 +19,16 @@ COPY . .
 RUN composer install --optimize-autoloader --no-dev --ignore-platform-reqs
 RUN npm install && npm run build
 
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+# Memastikan folder internal Laravel yang sering ter-gitignore tetap ada di server production
+RUN mkdir -p storage/framework/cache/data \
+             storage/framework/sessions \
+             storage/framework/views \
+             storage/logs \
+             bootstrap/cache
+
+# Mengatur hak milik dan izin akses (read/write) secara penuh untuk folder storage dan cache
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
+    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 8000
 
