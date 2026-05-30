@@ -32,7 +32,8 @@ class RemoveBackgroundService
 
         $inputEscaped  = escapeshellarg($absolutePath);
         $outputEscaped = escapeshellarg($editedAbsPath);
-        $cmd           = "U2NET_HOME=/opt/rembg-models $rembgBin i $inputEscaped $outputEscaped 2>&1";
+        $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
+        $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " $rembgBin i $inputEscaped $outputEscaped 2>&1";
 
         exec($cmd, $output, $exitCode);
 
