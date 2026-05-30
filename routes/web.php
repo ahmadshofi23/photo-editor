@@ -11,22 +11,32 @@ Route::get('/', function () {
 });
 
 Route::get('/debug-rembg', function () {
-    $which = shell_exec('which rembg 2>&1');
-    $version = shell_exec('rembg --version 2>&1');
-    $python = shell_exec('python3 --version 2>&1');
-    $pip = shell_exec('pip3 show rembg 2>&1');
-    $paths = [
-        '/usr/local/bin/rembg' => file_exists('/usr/local/bin/rembg'),
-        '/usr/bin/rembg' => file_exists('/usr/bin/rembg'),
-        '/usr/local/lib/python3.11/dist-packages/rembg' => file_exists('/usr/local/lib/python3.11/dist-packages/rembg'),
-    ];
+    // Buat test image kecil (1x1 px PNG)
+    $testInput  = sys_get_temp_dir() . '/test_input.png';
+    $testOutput = sys_get_temp_dir() . '/test_output.png';
+
+    // Buat gambar 10x10 merah sebagai test
+    $img = imagecreatetruecolor(10, 10);
+    $red = imagecolorallocate($img, 255, 0, 0);
+    imagefill($img, 0, 0, $red);
+    imagepng($img, $testInput);
+    imagedestroy($img);
+
+    $cmd    = "U2NET_HOME=/opt/rembg-models /usr/local/bin/rembg i " . escapeshellarg($testInput) . " " . escapeshellarg($testOutput) . " 2>&1";
+    $output = [];
+    $exit   = -1;
+    exec($cmd, $output, $exit);
+
     return response()->json([
-        'which_rembg' => trim($which),
-        'rembg_version' => trim($version),
-        'python3' => trim($python),
-        'pip_show' => trim($pip),
-        'path_exists' => $paths,
-        'env_PATH' => getenv('PATH'),
+        'rembg_version'  => trim(shell_exec('/usr/local/bin/rembg --version 2>&1')),
+        'model_dir'      => array_values(array_filter(scandir('/opt/rembg-models') ?? [], fn($f) => $f !== '.' && $f !== '..')),
+        'test_cmd'       => $cmd,
+        'test_exit_code' => $exit,
+        'test_output'    => implode("\n", $output),
+        'output_exists'  => file_exists($testOutput),
+        'tmp_writable'   => is_writable(sys_get_temp_dir()),
+        'env_HOME'       => getenv('HOME'),
+        'env_PATH'       => getenv('PATH'),
     ]);
 });
 
