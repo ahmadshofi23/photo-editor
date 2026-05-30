@@ -87,7 +87,7 @@ class SecureHeaders
             // Objects, embeds, base
             "object-src 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            "form-action 'self' " . config('app.url'),
         ];
 
         // Remove empty segments from non-dev builds

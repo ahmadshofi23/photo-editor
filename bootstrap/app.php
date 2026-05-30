@@ -13,6 +13,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Trust all proxies (Railway load balancer) so HTTPS is detected correctly
+        $middleware->trustProxies(at: '*');
+
         // Sanctum: allow session-based auth for first-party API calls (dashboard upload, etc.)
         $middleware->statefulApi();
 
