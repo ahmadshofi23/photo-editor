@@ -1,21 +1,16 @@
 #!/bin/bash
-set -e
 
-# Railway persistent volume di-mount ke /data
-# Pindahkan storage Laravel ke sana agar tidak hilang saat redeploy
 PERSISTENT_STORAGE="/data/storage"
 APP_STORAGE="/var/www/storage/app/public"
 
+# Setup persistent volume jika /data tersedia
 if [ -d "/data" ]; then
-    # Buat direktori di persistent volume jika belum ada
     mkdir -p "$PERSISTENT_STORAGE/uploads/original"
     mkdir -p "$PERSISTENT_STORAGE/uploads/processed"
 
-    # Hapus symlink lama jika ada, lalu buat symlink ke volume
     if [ -L "$APP_STORAGE" ]; then
         rm "$APP_STORAGE"
     elif [ -d "$APP_STORAGE" ]; then
-        # Copy file existing ke volume sebelum symlink (migrasi pertama kali)
         cp -rn "$APP_STORAGE/." "$PERSISTENT_STORAGE/" 2>/dev/null || true
         rm -rf "$APP_STORAGE"
     fi
@@ -25,9 +20,9 @@ if [ -d "/data" ]; then
     chmod -R 775 /data/storage 2>/dev/null || true
 fi
 
-# Buat storage symlink public jika belum ada
+# Buat storage symlink public
 if [ ! -L "/var/www/public/storage" ]; then
-    php /var/www/artisan storage:link
+    php /var/www/artisan storage:link 2>/dev/null || true
 fi
 
 # Jalankan PHP server
