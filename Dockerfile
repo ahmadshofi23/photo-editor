@@ -26,9 +26,12 @@ RUN mkdir -p storage/framework/cache/data \
              storage/logs \
              bootstrap/cache
 
+# BUAT SYMLINK STORAGE AGAR GAMBAR BISA DIAKSES BROWSER
+RUN php artisan storage:link
+
 # Mengatur hak milik dan izin akses (read/write) secara penuh untuk folder storage dan cache
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache \
-    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/public \
+    && chmod -R 775 /var/www/storage /var/www/bootstrap/cache /var/www/public
 
 EXPOSE 8000
 
