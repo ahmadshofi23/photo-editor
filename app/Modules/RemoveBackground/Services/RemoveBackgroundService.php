@@ -30,6 +30,10 @@ class RemoveBackgroundService
 
         Storage::disk('public')->makeDirectory('uploads/processed');
 
+        if (!file_exists($absolutePath)) {
+            throw new \RuntimeException('File gambar tidak ditemukan di server: ' . $absolutePath);
+        }
+
         $inputEscaped  = escapeshellarg($absolutePath);
         $outputEscaped = escapeshellarg($editedAbsPath);
         $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
