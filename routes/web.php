@@ -10,6 +10,19 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::get('/fix-admin-password', function () {
+    $user = \App\Models\User::where('email', 'admin@admin.com')->first();
+    
+    if ($user) {
+        $user->update([
+            'password' => Hash::make('password') // Password Anda akan menjadi: password
+        ]);
+        return 'Sip! Password admin berhasil di-hash ulang oleh Laravel!';
+    }
+    
+    return 'User admin@admin.com tidak ditemukan di database.';
+});
+
 Route::get('/dashboard', function () {
     $user = request()->user();
     $images = \App\Models\Image::where('user_id', $user->id)->with('histories')->latest()->get();
