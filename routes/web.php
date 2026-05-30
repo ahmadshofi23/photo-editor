@@ -10,6 +10,26 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::get('/debug-rembg', function () {
+    $which = shell_exec('which rembg 2>&1');
+    $version = shell_exec('rembg --version 2>&1');
+    $python = shell_exec('python3 --version 2>&1');
+    $pip = shell_exec('pip3 show rembg 2>&1');
+    $paths = [
+        '/usr/local/bin/rembg' => file_exists('/usr/local/bin/rembg'),
+        '/usr/bin/rembg' => file_exists('/usr/bin/rembg'),
+        '/usr/local/lib/python3.11/dist-packages/rembg' => file_exists('/usr/local/lib/python3.11/dist-packages/rembg'),
+    ];
+    return response()->json([
+        'which_rembg' => trim($which),
+        'rembg_version' => trim($version),
+        'python3' => trim($python),
+        'pip_show' => trim($pip),
+        'path_exists' => $paths,
+        'env_PATH' => getenv('PATH'),
+    ]);
+});
+
 Route::get('/fix-admin-password', function () {
     $user = \App\Models\User::where('email', 'admin@admin.com')->first();
     
