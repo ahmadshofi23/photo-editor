@@ -1,13 +1,17 @@
 FROM php:8.4-fpm
 
-# Install system dependencies + Node.js 20
+# Install system dependencies + Node.js 20 + Python3 for rembg
 RUN apt-get update && apt-get install -y \
     git curl zip unzip libpng-dev libonig-dev \
     libxml2-dev libpq-dev libzip-dev libicu-dev ca-certificates gnupg \
+    python3 python3-pip python3-venv \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && docker-php-ext-install \
         pdo pdo_mysql mbstring exif pcntl bcmath gd zip intl
+
+# Install rembg (background removal CLI)
+RUN pip3 install rembg[cli] --break-system-packages
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer

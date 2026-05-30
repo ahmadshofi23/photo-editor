@@ -64,8 +64,11 @@ class RemoveBackgroundService
     private function findRembg(): string
     {
         $candidates = [
-            '/Users/mac/.pyenv/versions/3.12.2/bin/rembg',
             trim((string) shell_exec('which rembg 2>/dev/null')),
+            '/usr/local/bin/rembg',
+            '/usr/bin/rembg',
+            // local dev (Mac)
+            '/Users/mac/.pyenv/versions/3.12.2/bin/rembg',
             'rembg',
         ];
 
