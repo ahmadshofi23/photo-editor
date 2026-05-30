@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y \
         pdo pdo_mysql mbstring exif pcntl bcmath gd zip intl
 
 # Install rembg with CPU onnxruntime backend
-RUN pip3 install "rembg[cpu]" --break-system-packages
+RUN pip3 install "rembg[cpu,cli]" --break-system-packages
 
 # Pre-download rembg model ke lokasi global yang bisa diakses semua user (termasuk www-data)
 ENV U2NET_HOME=/opt/rembg-models
