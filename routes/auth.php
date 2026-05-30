@@ -13,6 +13,9 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     // Registration disabled — single-user app
+    Route::get('register', fn () => redirect()->route('login'))->name('register');
+    Route::post('register', fn () => redirect()->route('login'));
+
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 

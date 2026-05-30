@@ -339,6 +339,27 @@
 
                     this.activePaper = this.papers[0];
 
+                    // Replace stale localStorage photo data with fresh server data.
+                    // localStorage stores url, widthCm, heightCm, type, etc. — all can go stale
+                    // after a subsequent edit session changes the generated file for that slot.
+                    const photoMap = {};
+                    this.photos.forEach(p => { photoMap[p.historyId] = p; });
+                    let droppedCount = 0;
+                    this.queue = this.queue
+                        .map(entry => {
+                            const fresh = photoMap[entry.photo.historyId];
+                            if (!fresh) { droppedCount++; return null; }
+                            return { ...entry, photo: { ...fresh, displayName: entry.photo.displayName || '' } };
+                        })
+                        .filter(Boolean);
+                    if (droppedCount > 0) {
+                        this.$nextTick(() => {
+                            window.dispatchEvent(new CustomEvent('notify', {
+                                detail: { message: `${droppedCount} foto di antrian diperbarui karena ada sesi edit baru.`, type: 'info' }
+                            }));
+                        });
+                    }
+
                     if (this.preSelectedId) {
                         // Find the slot with the highest latestHistoryDbId for this image
                         // (= the group that was most recently edited, regardless of array order)

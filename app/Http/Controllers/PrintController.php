@@ -19,6 +19,18 @@ class PrintController extends Controller
     public function index(Request $request)
     {
         $user   = $request->user();
+
+        // Reset edited_path for the specific image being printed (if image_id is passed).
+        // This marks the "end of a session" — when user returns to dashboard, status shows Original.
+        // The actual edited files remain on disk and in history; only the model pointer is cleared.
+        $printImageId = $request->query('image_id');
+        if ($printImageId) {
+            Image::where('user_id', $user->id)
+                 ->where('id', $printImageId)
+                 ->whereNotNull('edited_path')
+                 ->update(['edited_path' => null, 'status' => 'pending']);
+        }
+
         $images = Image::where('user_id', $user->id)
                        ->with(['histories' => fn ($q) => $q->orderBy('id', 'desc')])
                        ->latest()
@@ -36,78 +48,144 @@ class PrintController extends Controller
             // All histories sorted oldest → newest (used for session analysis below)
             $allChronological = $img->histories->sortBy('id')->values();
 
-            // IDs of resize histories — used to detect whether a B&W step was intermediate
-            $resizeIds = $allChronological->where('action_type', 'resized')->pluck('id');
+            // ── Session-based approach ────────────────────────────────────────────
+            // A "session" = everything between two consecutive resize operations.
+            // Each resize defines one print slot. Post-resize styling (B&W, auto_contrast)
+            // within the same session updates that slot's file but doesn't create a new slot.
+            // Pre-resize styling (applied before ANY resize) is excluded — the resize
+            // captures that content as its input.
+            //
+            // Session boundary rules:
+            //   resize(A) → [styling…] → resize(B) → [styling…]
+            //   Session 1 output = last entry ≤ id of (resize(B) - 1) that has generated_path
+            //   Session 2 output = last entry after resize(B) that has generated_path
+            //
+            // For images with no resize at all, we show the latest meaningful entry.
+            // ─────────────────────────────────────────────────────────────────────
 
-            // A black_white_converted entry is INTERMEDIATE if any resize (higher ID) follows it.
-            // Intermediate B&W entries must be excluded — their visual result is already
-            // captured in the subsequent resize entry (the resize was applied to the B&W image).
-            $intermediateBwIds = $allChronological
-                ->where('action_type', 'black_white_converted')
-                ->filter(fn ($bw) => $resizeIds->some(fn ($rid) => $rid > $bw->id))
-                ->pluck('id');
+            $postResizeStylingTypes = ['black_white_converted', 'auto_contrast'];
 
-            $printHistories = $allChronological->filter(
+            // Collect all resize entries as session boundary markers
+            $resizeEntries = $allChronological->where('action_type', 'resized')->values();
+
+            // Entries eligible to appear in print library (have a file, not BG-only ops)
+            $eligible = $allChronological->filter(
                 fn ($h) => isset($h->metadata['generated_path'])
                     && !in_array($h->action_type, $excludedActions)
-                    && !$intermediateBwIds->contains($h->id)
-            );
+            )->values();
 
+            if ($resizeEntries->isEmpty()) {
+                // No resize at all — show latest eligible entry only
+                $printHistories = $eligible->isEmpty() ? collect() : collect([$eligible->last()]);
+            } else {
+                // Build one slot per resize session.
+                // Slot = the last eligible entry WITHIN that session window.
+                // Session window for resize[i] = (resize[i].id … resize[i+1].id - 1)
+                // i.e., from the resize itself up to (but not including) the next resize.
+                $slots = collect();
+                foreach ($resizeEntries as $idx => $resize) {
+                    $nextResizeId = $resizeEntries->get($idx + 1)?->id ?? PHP_INT_MAX;
+                    $isLastSession = $nextResizeId === PHP_INT_MAX;
+
+                    // All eligible entries in this session window (>= resize.id, < nextResizeId)
+                    $sessionEntries = $eligible->filter(
+                        fn ($h) => $h->id >= $resize->id && $h->id < $nextResizeId
+                    );
+
+                    // If there is a next resize, any post-resize styling entries (B&W, auto_contrast)
+                    // inside this window were applied as INPUT to that next resize, not as the
+                    // final output of this session. Exclude them so the slot falls back to the
+                    // resize entry itself (the only safe representative for a non-terminal session).
+                    if (!$isLastSession) {
+                        $sessionEntries = $sessionEntries->filter(
+                            fn ($h) => !in_array($h->action_type, $postResizeStylingTypes)
+                        );
+                    }
+
+                    if ($sessionEntries->isNotEmpty()) {
+                        $slots->push($sessionEntries->last());
+                    }
+                }
+                $printHistories = $slots;
+            }
+
+            // ── Build a stable group key per slot ─────────────────────────────────
+            // Key = resize dimensions + background fingerprint + B&W flag.
+            // Computed from the resize entry that opened the session (stable across re-edits).
             if ($printHistories->isNotEmpty()) {
 
-                // Group by: size + preset + full styling fingerprint.
-                // Rules:
-                //   • Same size + same style (done twice)  → ONE slot (latest wins)
-                //   • Same size + B&W vs colored           → separate slots
-                //   • Same size + red BG vs blue BG        → separate slots
-                //   • Same size + no BG (transparent) vs colored → separate slots
-                $grouped = $printHistories->groupBy(function ($h) use ($allChronological) {
-                    $mode = $h->metadata['mode'] ?? $h->action_type;
-                    $w    = $h->metadata['width']  ?? 0;
-                    $hh   = $h->metadata['height'] ?? 0;
+                $grouped = $printHistories->groupBy(function ($h) use ($allChronological, $resizeEntries, $postResizeStylingTypes) {
+                    // Find the resize that opened this session
+                    $sessionResize = $resizeEntries->last(fn ($r) => $r->id <= $h->id);
 
-                    // Walk back through ALL histories before this entry to build a styling fingerprint.
-                    // We look for the most recent change_background and black_white_converted
-                    // that were applied in the same "session" (before the next resize).
-                    $precedingAll = $allChronological->filter(fn ($p) => $p->id < $h->id);
+                    $w  = $sessionResize ? ($sessionResize->metadata['width']  ?? 0) : ($h->metadata['width']  ?? 0);
+                    $hh = $sessionResize ? ($sessionResize->metadata['height'] ?? 0) : ($h->metadata['height'] ?? 0);
+                    $mode = $sessionResize
+                        ? ($sessionResize->metadata['mode'] ?? $sessionResize->action_type)
+                        : ($h->metadata['mode'] ?? $h->action_type);
 
-                    // Most recent B&W flag
-                    $lastBw = $precedingAll->last(fn ($p) => $p->action_type === 'black_white_converted');
+                    // Styling fingerprint: only count ops strictly within this session's window.
+                    // Session window = [sessionResize.id, nextResize.id)
+                    // Anything outside this window belongs to another session.
+                    $sessionStart = $sessionResize ? $sessionResize->id : 0;
 
-                    // Most recent background change (color or transparent from remove_bg)
-                    $lastBg = $precedingAll->last(
+                    // Find the next resize after this session to close the window
+                    $nextResizeId = $resizeEntries->first(fn ($r) => $r->id > $sessionStart)?->id ?? PHP_INT_MAX;
+
+                    // Only look at entries within this session's exact window
+                    $windowEntries = $allChronological->filter(
+                        fn ($p) => $p->id >= $sessionStart && $p->id < $nextResizeId
+                    );
+
+                    // BG was applied BEFORE the resize (as input). Look in the window just before sessionStart.
+                    $prevSessionStart = $resizeEntries->last(fn ($r) => $r->id < $sessionStart)?->id ?? 0;
+                    $lastBg = $allChronological->filter(
                         fn ($p) => in_array($p->action_type, ['change_background', 'remove_background'])
-                    );
+                                   && $p->id > $prevSessionStart
+                                   && $p->id <= $sessionStart
+                    )->last();
 
-                    // Find the last RESIZE before $h — only resize entries define session boundaries.
-                    // B&W and other styling steps must NOT count as session boundaries,
-                    // otherwise the B&W suffix detection breaks when B&W precedes resize.
-                    $prevResize = $precedingAll->last(
-                        fn ($p) => $p->action_type === 'resized'
-                    );
-                    $sessionStart = $prevResize ? $prevResize->id : 0;
+                    // B&W / auto_contrast within this session's window only.
+                    // For non-terminal sessions, exclude post-resize styling entries that were
+                    // applied as input to the NEXT resize (same exclusion as slot selection above).
+                    $isLastSession = ($nextResizeId === PHP_INT_MAX);
+                    $stylingWindow = $isLastSession
+                        ? $windowEntries
+                        : $windowEntries->filter(
+                            fn ($p) => !in_array($p->action_type, $postResizeStylingTypes)
+                        );
 
-                    // Only count styling applied AFTER the previous resize (= this session)
-                    $bwThisSession = $lastBw && $lastBw->id > $sessionStart;
-                    $bgThisSession = $lastBg && $lastBg->id > $sessionStart;
+                    $lastBw = $stylingWindow->filter(
+                        fn ($p) => $p->action_type === 'black_white_converted'
+                    )->last();
+
+                    $lastAc = $stylingWindow->filter(
+                        fn ($p) => $p->action_type === 'auto_contrast'
+                    )->last();
+
+                    $bwThisSession = (bool) $lastBw;
+                    $acThisSession = (bool) $lastAc;
+                    $bgThisSession = (bool) $lastBg;
 
                     $bwSuffix = $bwThisSession ? '_bw' : '';
+                    $acSuffix = $acThisSession ? '_ac' : '';
 
                     $bgSuffix = '';
                     if ($bgThisSession) {
                         if ($lastBg->action_type === 'remove_background') {
                             $bgSuffix = '_transparent';
                         } elseif (($lastBg->metadata['bg_type'] ?? '') === 'image') {
-                            // Image background: hash the generated path as a unique fingerprint
                             $bgSuffix = '_bg_img_' . substr(md5($lastBg->metadata['generated_path'] ?? ''), 0, 8);
                         } else {
-                            // Color background: use hex value as fingerprint (e.g. _bg_ff0000)
                             $color    = $lastBg->metadata['bg_color'] ?? 'unknown';
                             $bgSuffix = '_bg_' . ltrim(strtolower($color), '#');
                         }
                     }
 
-                    return $mode . '_' . $w . 'x' . $hh . $bwSuffix . $bgSuffix;
+                    // Include the session's resize ID to ensure each resize session
+                    // always gets its own unique slot, even if dimensions happen to match a previous session.
+                    $sessionId = $sessionResize ? $sessionResize->id : 0;
+                    return 'sess' . $sessionId . '_' . $mode . '_' . $w . 'x' . $hh . $bwSuffix . $acSuffix . $bgSuffix;
                 });
 
                 // Within each group take the LATEST entry (highest ID = most recent)
@@ -119,9 +197,12 @@ class PrintController extends Controller
                     $fileName = basename($path);
                     $nameOnly = pathinfo($fileName, PATHINFO_FILENAME);
 
-                    if ($history->action_type === 'black_white_converted') {
-                        $widthPx  = $img->width  ?? ($meta['width']  ?? null);
-                        $heightPx = $img->height ?? ($meta['height'] ?? null);
+                    // Always use the session's resize dimensions for consistent sizing.
+                    // Post-resize styling (B&W, auto_contrast) doesn't change pixel dimensions.
+                    $sessionResize = $resizeEntries->last(fn ($r) => $r->id <= $history->id);
+                    if ($sessionResize) {
+                        $widthPx  = $sessionResize->metadata['width']  ?? ($meta['width']  ?? null);
+                        $heightPx = $sessionResize->metadata['height'] ?? ($meta['height'] ?? null);
                     } else {
                         $widthPx  = $meta['width']  ?? null;
                         $heightPx = $meta['height'] ?? null;
@@ -133,15 +214,19 @@ class PrintController extends Controller
                                 ? round($widthPx / $heightPx, 4)
                                 : 1;
 
-                    $modeRaw   = $meta['mode'] ?? $history->action_type;
+                    // Label comes from the resize entry that opened this session
+                    $modeRaw   = $sessionResize
+                        ? ($sessionResize->metadata['mode'] ?? $sessionResize->action_type)
+                        : ($meta['mode'] ?? $history->action_type);
                     $baseLabel = ucwords(str_replace(['preset_', '_'], ['', ' '], $modeRaw));
 
                     // Append styling badges so library cards are distinguishable
                     $styleLabel = '';
                     if (str_contains($groupKey, '_bw'))          $styleLabel .= ' · Hitam Putih';
+                    if (str_contains($groupKey, '_ac'))          $styleLabel .= ' · Auto Kontras';
                     if (str_contains($groupKey, '_transparent'))  $styleLabel .= ' · Transparan';
                     elseif (str_contains($groupKey, '_bg_img_'))  $styleLabel .= ' · Gambar Latar';
-                    elseif (preg_match('/_bg_([0-9a-f]+)$/', $groupKey, $m)) $styleLabel .= ' · Latar #' . strtoupper($m[1]);
+                    elseif (preg_match('/_bg_([0-9a-f]+)(_|$)/', $groupKey, $m)) $styleLabel .= ' · Latar #' . strtoupper($m[1]);
 
                     $typeLabel = $baseLabel . $styleLabel;
 

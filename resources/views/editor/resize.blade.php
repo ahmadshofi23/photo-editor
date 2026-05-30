@@ -43,7 +43,8 @@ main { overflow: hidden !important; }
         </div>
 
         <!-- Canvas -->
-        <div class="flex-1 relative overflow-hidden" style="min-height: 400px;">
+        <div class="flex-1 relative overflow-hidden" style="min-height: 400px;"
+             @wheel.prevent="onCanvasWheel($event)">
             <!-- Checkerboard bg (shows transparency) -->
             <div class="absolute inset-0"
                  :style="showCheckerboard ? 'background-image: repeating-conic-gradient(#334155 0% 25%, #1e293b 0% 50%) ; background-size: 24px 24px;' : 'background: #0f172a'">
@@ -76,9 +77,97 @@ main { overflow: hidden !important; }
                 </div>
             </div>
 
+            <!-- Zoom & Rotate Toolbar -->
+            <div x-show="mainStatus !== 'done' && mainStatus !== 'processing'"
+                 x-transition
+                 class="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 bg-slate-900/95 backdrop-blur border border-slate-700 rounded-2xl px-3 py-2 shadow-xl">
+
+                <!-- Rotate Left 90 -->
+                <button @click="rotateImage(-90)"
+                        title="Putar kiri 90°"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a7 7 0 017 7v1M3 10l4-4M3 10l4 4"/>
+                    </svg>
+                </button>
+
+                <!-- Rotation Slider -->
+                <div class="flex flex-col items-center gap-0.5 px-1">
+                    <input type="range" min="-180" max="180" step="1"
+                           :value="currentRotation"
+                           @input="onRotationSlider($event)"
+                           class="w-24 h-1.5 accent-blue-500 cursor-pointer"
+                           title="Geser untuk memutar gambar">
+                    <span class="text-xs text-slate-500 font-mono" x-text="currentRotation + '°'"></span>
+                </div>
+
+                <!-- Rotate Right 90 -->
+                <button @click="rotateImage(90)"
+                        title="Putar kanan 90°"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 10H11a7 7 0 00-7 7v1M21 10l-4-4M21 10l-4 4"/>
+                    </svg>
+                </button>
+
+                <div class="w-px h-5 bg-slate-700 mx-1"></div>
+
+                <!-- Zoom Out -->
+                <button @click="zoomImage(-0.1)"
+                        title="Perkecil"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0zm-6 0H8"/>
+                    </svg>
+                </button>
+
+                <!-- Zoom Level Display -->
+                <span class="text-xs text-slate-400 font-mono w-10 text-center select-none" x-text="zoomLabel"></span>
+
+                <!-- Zoom In -->
+                <button @click="zoomImage(0.1)"
+                        title="Perbesar"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 105 11a6 6 0 0012 0zm-3 0h-3m0 0H8m3 0V8m0 3v3"/>
+                    </svg>
+                </button>
+
+                <div class="w-px h-5 bg-slate-700 mx-1"></div>
+
+                <!-- Flip Horizontal -->
+                <button @click="flipImage('h')"
+                        title="Balik horizontal"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7l-4 4 4 4M16 7l4 4-4 4M12 3v18"/>
+                    </svg>
+                </button>
+
+                <!-- Flip Vertical -->
+                <button @click="flipImage('v')"
+                        title="Balik vertikal"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-white hover:bg-slate-700 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 8l4-4 4 4M7 16l4 4 4-4M3 12h18"/>
+                    </svg>
+                </button>
+
+                <div class="w-px h-5 bg-slate-700 mx-1"></div>
+
+                <!-- Reset Transform -->
+                <button @click="resetTransform()"
+                        title="Reset zoom & rotasi"
+                        class="w-8 h-8 flex items-center justify-center rounded-xl text-slate-300 hover:text-amber-400 hover:bg-amber-500/10 transition-all">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0114.13-3.36M20 15a9 9 0 01-14.13 3.36"/>
+                    </svg>
+                </button>
+            </div>
+
             <!-- Idle hint — only when no crop selected -->
             <div x-show="mainStatus === 'idle' && !targetW"
-                 class="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none z-10">
+                 class="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none z-10">
                 <div class="text-center bg-slate-900/90 backdrop-blur px-4 py-3 rounded-xl border border-slate-700 shadow-xl">
                     <p class="text-slate-300 text-sm font-medium">👈 Mulai dari panel kanan</p>
                     <p class="text-slate-500 text-xs mt-1">Ikuti langkah 1, 2, 3 secara berurutan</p>
@@ -336,9 +425,30 @@ main { overflow: hidden !important; }
 
             <div x-show="activeStep === 2" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
                 <div class="px-4 pb-4 border-t border-slate-700 pt-4">
+                    <!-- Auto Contrast -->
+                    <button @click="processAutoContrast"
+                            :disabled="acStatus === 'processing' || acStatus === 'done'"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border font-semibold text-sm transition-all"
+                            :class="acStatus === 'done'
+                                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 cursor-default'
+                                : acStatus === 'processing'
+                                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                                    : 'border-slate-600 bg-slate-700/50 text-white hover:border-yellow-500 hover:bg-yellow-500/10 hover:text-yellow-300'">
+                        <template x-if="acStatus === 'processing'">
+                            <svg class="w-5 h-5 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        </template>
+                        <span x-show="acStatus !== 'processing'" class="text-xl flex-shrink-0">✨</span>
+                        <div class="text-left">
+                            <p x-text="acStatus === 'processing' ? 'Menyesuaikan pencahayaan...' : acStatus === 'done' ? '✓ Auto Contrast Diterapkan' : 'Auto Contrast'"></p>
+                            <p x-show="acStatus === 'idle'" class="text-xs font-normal opacity-60">Sesuaikan pencahayaan secara otomatis</p>
+                        </div>
+                    </button>
+                    <p x-show="acStatus === 'error'" class="text-xs text-red-400 mt-2 px-1">Auto contrast gagal. Coba lagi.</p>
+
+                    <!-- Hitam & Putih -->
                     <button @click="processBW"
                             :disabled="bwStatus === 'processing' || bwStatus === 'done'"
-                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border font-semibold text-sm transition-all"
+                            class="w-full flex items-center gap-3 px-4 py-3 rounded-xl border font-semibold text-sm transition-all mt-2"
                             :class="bwStatus === 'done'
                                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 cursor-default'
                                 : bwStatus === 'processing'
@@ -474,6 +584,9 @@ function resizeEditor() {
         targetH: null,
         cropper: null,
 
+        // Auto Contrast state
+        acStatus: 'idle',   // idle | processing | done | error
+
         // B&W state
         bwStatus: 'idle',
         bwUrl: null,
@@ -482,6 +595,13 @@ function resizeEditor() {
         bgStatus: 'idle',         // idle | processing | done | error
         changeBgStatus: 'idle',   // idle | processing | done | error
         selectedBgColor: '#ffffff',
+
+        // Transform state
+        currentZoom: 1,
+        currentRotation: 0,
+        flipH: false,
+        flipV: false,
+        get zoomLabel() { return Math.round(this.currentZoom * 100) + '%'; },
 
         bgColorSwatches: [
             '#ffffff', '#f8fafc', '#e2e8f0', '#94a3b8',
@@ -514,7 +634,56 @@ function resizeEditor() {
                 cropBoxMovable: true,
                 cropBoxResizable: true,
                 toggleDragModeOnDblclick: false,
+                zoom: (e) => {
+                    this.currentZoom = e.detail.ratio;
+                },
             });
+        },
+
+        zoomImage(ratio) {
+            if (!this.cropper) return;
+            this.cropper.zoom(ratio);
+        },
+
+        rotateImage(deg) {
+            if (!this.cropper) return;
+            this.currentRotation = ((this.currentRotation + deg) % 360 + 360) % 360;
+            if (this.currentRotation > 180) this.currentRotation -= 360;
+            this.cropper.rotate(deg);
+        },
+
+        onRotationSlider(e) {
+            if (!this.cropper) return;
+            const newAngle = parseInt(e.target.value);
+            const delta = newAngle - this.currentRotation;
+            this.currentRotation = newAngle;
+            this.cropper.rotate(delta);
+        },
+
+        flipImage(dir) {
+            if (!this.cropper) return;
+            if (dir === 'h') {
+                this.flipH = !this.flipH;
+                this.cropper.scaleX(this.flipH ? -1 : 1);
+            } else {
+                this.flipV = !this.flipV;
+                this.cropper.scaleY(this.flipV ? -1 : 1);
+            }
+        },
+
+        resetTransform() {
+            if (!this.cropper) return;
+            this.currentRotation = 0;
+            this.flipH = false;
+            this.flipV = false;
+            this.currentZoom = 1;
+            this.cropper.reset();
+        },
+
+        onCanvasWheel(e) {
+            if (!this.cropper) return;
+            const delta = e.deltaY > 0 ? -0.1 : 0.1;
+            this.zoomImage(delta);
         },
 
         skipStep(index) {
@@ -613,6 +782,38 @@ function resizeEditor() {
                 })
                 .catch(() => {
                     this.changeBgStatus = 'error';
+                    if (this.mainStatus !== 'done') this.mainStatus = 'idle';
+                });
+        },
+
+        processAutoContrast() {
+            if (this.acStatus === 'processing' || this.acStatus === 'done') return;
+            if (this.mainStatus === 'done') return;
+            this.acStatus = 'processing';
+            this.processingMsg = 'Menyesuaikan pencahayaan otomatis…';
+            this.mainStatus = 'processing';
+
+            axios.post('/api/v1/auto-contrast', { image_id: this.imageId })
+                .then(res => {
+                    const payload = res.data.data || res.data;
+                    const url = payload?.edited_url;
+                    if (url) {
+                        const freshUrl = url + '?t=' + Date.now();
+                        this.previewUrl = freshUrl;
+                        this.originalUrl = freshUrl;
+                        if (this.cropper) {
+                            this.cropper.replace(freshUrl, true);
+                        }
+                        this.acStatus = 'done';
+                        this.steps[2].done = true;
+                        if (this.mainStatus !== 'done') this.mainStatus = 'idle';
+                        window.dispatchEvent(new CustomEvent('notify', { detail: { message: '✨ Pencahayaan berhasil disesuaikan!', type: 'success' } }));
+                    } else {
+                        throw new Error('No URL');
+                    }
+                })
+                .catch(err => {
+                    this.acStatus = 'error';
                     if (this.mainStatus !== 'done') this.mainStatus = 'idle';
                 });
         },
@@ -725,7 +926,12 @@ function resizeEditor() {
                     this.bwUrl = null;
                     this.bgStatus = 'idle';
                     this.changeBgStatus = 'idle';
+                    this.acStatus = 'idle';
                     this.showCheckerboard = false;
+                    this.currentZoom = 1;
+                    this.currentRotation = 0;
+                    this.flipH = false;
+                    this.flipV = false;
                     this.steps = [{ label: 'Latar', done: false }, { label: 'Ukuran', done: false }, { label: 'Gaya', done: false }];
                     this.activeStep = 0;
 

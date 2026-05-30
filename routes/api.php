@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\ResizeController;
 use App\Http\Controllers\Api\V1\CompressController;
 use App\Http\Controllers\Api\V1\RemoveBackgroundController;
 use App\Http\Controllers\Api\V1\ChangeBackgroundController;
+use App\Http\Controllers\Api\V1\AutoContrastController;
 
 Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
     Route::post('/upload', [ImageController::class, 'upload'])
@@ -24,6 +25,7 @@ Route::middleware(['auth:sanctum'])->prefix('v1')->group(function () {
         Route::post('/compress', [CompressController::class, 'process']);
         Route::post('/remove-background', [RemoveBackgroundController::class, 'process']);
         Route::post('/change-background', [ChangeBackgroundController::class, 'process']);
+        Route::post('/auto-contrast', [AutoContrastController::class, 'process']);
     });
 
     Route::post('/images/{id}/reset', [ImageController::class, 'reset'])->name('api.images.reset');
