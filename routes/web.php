@@ -11,25 +11,35 @@ Route::get('/', function () {
 });
 
 Route::get('/debug-rembg', function () {
-    // Buat test image kecil (1x1 px PNG)
     $testInput  = sys_get_temp_dir() . '/test_input.png';
     $testOutput = sys_get_temp_dir() . '/test_output.png';
 
-    // Buat gambar 10x10 merah sebagai test
     $img = imagecreatetruecolor(10, 10);
-    $red = imagecolorallocate($img, 255, 0, 0);
-    imagefill($img, 0, 0, $red);
+    imagefill($img, 0, 0, imagecolorallocate($img, 255, 0, 0));
     imagepng($img, $testInput);
     imagedestroy($img);
 
-    $cmd    = "U2NET_HOME=/opt/rembg-models /usr/local/bin/rembg i " . escapeshellarg($testInput) . " " . escapeshellarg($testOutput) . " 2>&1";
+    // Cek apakah exec() dinonaktifkan
+    $disabledFunctions = explode(',', ini_get('disable_functions'));
+    $execDisabled = in_array('exec', array_map('trim', $disabledFunctions));
+
+    // Pakai U2NET_HOME dinamis sama seperti service
+    $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
+    $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " /usr/local/bin/rembg i " . escapeshellarg($testInput) . " " . escapeshellarg($testOutput) . " 2>&1";
+
     $output = [];
     $exit   = -1;
-    exec($cmd, $output, $exit);
+    if (!$execDisabled) {
+        exec($cmd, $output, $exit);
+    }
 
     return response()->json([
+        'exec_disabled'  => $execDisabled,
+        'disable_functions' => ini_get('disable_functions'),
+        'rembg_bin'      => trim(shell_exec('which rembg 2>&1')),
         'rembg_version'  => trim(shell_exec('/usr/local/bin/rembg --version 2>&1')),
-        'model_dir'      => array_values(array_filter(scandir('/opt/rembg-models') ?? [], fn($f) => $f !== '.' && $f !== '..')),
+        'model_dir'      => is_dir('/opt/rembg-models') ? array_values(array_filter(scandir('/opt/rembg-models'), fn($f) => $f !== '.' && $f !== '..')) : 'NOT FOUND',
+        'u2net_home'     => $u2netHome,
         'test_cmd'       => $cmd,
         'test_exit_code' => $exit,
         'test_output'    => implode("\n", $output),
