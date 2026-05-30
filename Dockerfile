@@ -13,6 +13,12 @@ RUN apt-get update && apt-get install -y \
 # Install rembg with CPU onnxruntime backend
 RUN pip3 install "rembg[cpu]" --break-system-packages
 
+# Pre-download rembg model ke lokasi global yang bisa diakses semua user (termasuk www-data)
+ENV U2NET_HOME=/opt/rembg-models
+RUN mkdir -p /opt/rembg-models \
+    && python3 -c "from rembg import new_session; new_session('u2net')" \
+    && chmod -R 755 /opt/rembg-models
+
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
