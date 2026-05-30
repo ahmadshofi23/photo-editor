@@ -10,6 +10,30 @@ Route::get('/', function () {
     return redirect()->route('login');
 });
 
+Route::get('/debug-image/{id}', function ($id) {
+    $image = \App\Models\Image::find($id);
+    if (!$image) return response()->json(['error' => 'Image not found in DB']);
+
+    $sourcePath   = $image->edited_path ?? $image->original_path;
+    $absolutePath = \Illuminate\Support\Facades\Storage::disk('public')->path($sourcePath);
+    $storageRoot  = \Illuminate\Support\Facades\Storage::disk('public')->path('');
+
+    return response()->json([
+        'image_id'       => $image->id,
+        'original_path'  => $image->original_path,
+        'edited_path'    => $image->edited_path,
+        'source_path'    => $sourcePath,
+        'absolute_path'  => $absolutePath,
+        'file_exists'    => file_exists($absolutePath),
+        'storage_root'   => $storageRoot,
+        'storage_root_is_symlink' => is_link(rtrim($storageRoot, '/')),
+        'symlink_target' => is_link(rtrim($storageRoot, '/')) ? readlink(rtrim($storageRoot, '/')) : null,
+        'data_dir_exists'=> is_dir('/data'),
+        'data_storage_exists' => is_dir('/data/storage'),
+        'data_files'     => is_dir('/data/storage') ? scandir('/data/storage') : 'N/A',
+    ]);
+});
+
 Route::get('/debug-rembg', function () {
     $testInput  = sys_get_temp_dir() . '/test_input.png';
     $testOutput = sys_get_temp_dir() . '/test_output.png';
