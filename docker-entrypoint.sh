@@ -25,5 +25,9 @@ fi
 echo "[entrypoint] Creating storage symlink..."
 php /var/www/artisan storage:link --force 2>/dev/null || true
 
+# Jalankan database migration
+echo "[entrypoint] Running migrations..."
+php /var/www/artisan migrate --force 2>/dev/null || true
+
 echo "[entrypoint] Starting PHP server on port 8000..."
 exec php -S 0.0.0.0:8000 -t /var/www/public
