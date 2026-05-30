@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Support\Facades\URL; // <-- Pastikan baris ini di-import
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -19,6 +20,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Paksa Laravel dan Vite menggunakan HTTPS jika berjalan di Railway
+        if (env('RAILWAY_ENVIRONMENT') || config('app.env') === 'production') {
+            URL::forceScheme('https');
+        }
+
         \Illuminate\Support\Facades\RateLimiter::for('api-upload', function (\Illuminate\Http\Request $request) {
             return \Illuminate\Cache\RateLimiting\Limit::perMinute(config('security.rate_limits.api_upload', 60))->by($request->user()?->id ?: $request->ip());
         });
