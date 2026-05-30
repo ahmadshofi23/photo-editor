@@ -5,8 +5,10 @@ RUN apt-get update && apt-get install -y \
     git curl zip unzip libpng-dev libonig-dev \
     libxml2-dev libpq-dev libzip-dev libicu-dev ca-certificates gnupg \
     python3 python3-pip python3-venv \
+    libjpeg62-turbo-dev libwebp-dev libfreetype6-dev \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
+    && docker-php-ext-configure gd --with-jpeg --with-webp --with-freetype \
     && docker-php-ext-install \
         pdo pdo_mysql mbstring exif pcntl bcmath gd zip intl
 
