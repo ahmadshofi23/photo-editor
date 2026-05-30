@@ -17,7 +17,7 @@ class RemoveBackgroundService
     ) {}
 
     // Maksimal panjang sisi gambar sebelum diproses rembg (hemat RAM di Railway)
-    private const MAX_REMBG_SIZE = 800;
+    private const MAX_REMBG_SIZE = 512;
 
     public function remove(Image $image, RemoveBackgroundDTO $dto): Image
     {
@@ -43,7 +43,7 @@ class RemoveBackgroundService
         $inputEscaped  = escapeshellarg($rembgInput);
         $outputEscaped = escapeshellarg($editedAbsPath);
         $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
-        $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " $rembgBin i $inputEscaped $outputEscaped 2>&1";
+        $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " $rembgBin i -m u2netp $inputEscaped $outputEscaped 2>&1";
 
         exec($cmd, $output, $exitCode);
 

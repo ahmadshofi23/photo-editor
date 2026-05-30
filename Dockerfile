@@ -23,9 +23,9 @@ RUN python3 -m venv $REMBG_VENV \
 # Buat symlink agar bisa dipanggil langsung sebagai 'rembg'
 RUN ln -sf $REMBG_VENV/bin/rembg /usr/local/bin/rembg
 
-# Pre-download model u2net ke lokasi global
+# Pre-download model u2netp (4MB vs 176MB, hemat RAM untuk Railway)
 RUN mkdir -p /opt/rembg-models \
-    && $REMBG_VENV/bin/python -c "from rembg import new_session; new_session('u2net')" \
+    && $REMBG_VENV/bin/python -c "from rembg import new_session; new_session('u2netp')" \
     && chmod -R 755 /opt/rembg-models
 
 # Install Composer
