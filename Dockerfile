@@ -26,6 +26,9 @@ RUN mkdir -p storage/framework/cache/data \
              storage/logs \
              bootstrap/cache
 
+# Tambahkan baris ini di dalam Dockerfile untuk menaikkan limit upload PHP
+RUN echo "upload_max_filesize = 20M\npost_max_size = 20M" > /usr/local/etc/php/conf.d/uploads.ini
+
 # BUAT SYMLINK STORAGE AGAR GAMBAR BISA DIAKSES BROWSER
 RUN php artisan storage:link
 
@@ -36,3 +39,4 @@ RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/ww
 EXPOSE 8000
 
 CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+
