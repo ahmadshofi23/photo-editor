@@ -10,13 +10,19 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install \
         pdo pdo_mysql mbstring exif pcntl bcmath gd zip intl
 
-# Install rembg with CPU onnxruntime backend
-RUN pip3 install "rembg[cpu,cli]" --break-system-packages
-
-# Pre-download rembg model ke lokasi global yang bisa diakses semua user (termasuk www-data)
+# Install rembg dalam virtual environment agar tidak konflik dengan system packages
+ENV REMBG_VENV=/opt/rembg-venv
 ENV U2NET_HOME=/opt/rembg-models
+RUN python3 -m venv $REMBG_VENV \
+    && $REMBG_VENV/bin/pip install --upgrade pip \
+    && $REMBG_VENV/bin/pip install "rembg[cpu,cli]"
+
+# Buat symlink agar bisa dipanggil langsung sebagai 'rembg'
+RUN ln -sf $REMBG_VENV/bin/rembg /usr/local/bin/rembg
+
+# Pre-download model u2net ke lokasi global
 RUN mkdir -p /opt/rembg-models \
-    && python3 -c "from rembg import new_session; new_session('u2net')" \
+    && $REMBG_VENV/bin/python -c "from rembg import new_session; new_session('u2net')" \
     && chmod -R 755 /opt/rembg-models
 
 # Install Composer
