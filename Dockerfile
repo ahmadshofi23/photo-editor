@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install \
         pdo pdo_mysql mbstring exif pcntl bcmath gd zip intl
 
-# Install rembg (background removal CLI)
-RUN pip3 install rembg[cli] --break-system-packages
+# Install rembg with CPU onnxruntime backend
+RUN pip3 install "rembg[cpu]" --break-system-packages
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
@@ -33,14 +33,15 @@ RUN mkdir -p storage/framework/cache/data \
 # Tambahkan baris ini di dalam Dockerfile untuk menaikkan limit upload PHP
 RUN echo "upload_max_filesize = 20M\npost_max_size = 20M" > /usr/local/etc/php/conf.d/uploads.ini
 
-# BUAT SYMLINK STORAGE AGAR GAMBAR BISA DIAKSES BROWSER
-RUN php artisan storage:link
-
 # Mengatur hak milik dan izin akses (read/write) secara penuh untuk folder storage dan cache
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache /var/www/public \
     && chmod -R 775 /var/www/storage /var/www/bootstrap/cache /var/www/public
 
 EXPOSE 8000
 
-CMD ["php", "-S", "0.0.0.0:8000", "-t", "public"]
+# Jalankan startup script: symlink persistent volume lalu start server
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
+CMD ["/usr/local/bin/docker-entrypoint.sh"]
 
