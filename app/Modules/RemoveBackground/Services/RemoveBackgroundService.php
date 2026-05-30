@@ -16,12 +16,19 @@ class RemoveBackgroundService
         private readonly HistoryService $historyService
     ) {}
 
+    // Maksimal panjang sisi gambar sebelum diproses rembg (hemat RAM)
+    private const MAX_REMBG_SIZE = 1500;
+
     public function remove(Image $image, RemoveBackgroundDTO $dto): Image
     {
         $rembgBin = $this->findRembg();
 
         $sourcePath   = $image->edited_path ?? $image->original_path;
         $absolutePath = Storage::disk('public')->path($sourcePath);
+
+        if (!file_exists($absolutePath)) {
+            throw new \RuntimeException('File gambar tidak ditemukan di server: ' . $absolutePath);
+        }
 
         $fileName      = pathinfo($image->original_path, PATHINFO_FILENAME);
         $editedName    = $fileName . '_removebg_' . Str::random(5) . '.png';
@@ -30,16 +37,20 @@ class RemoveBackgroundService
 
         Storage::disk('public')->makeDirectory('uploads/processed');
 
-        if (!file_exists($absolutePath)) {
-            throw new \RuntimeException('File gambar tidak ditemukan di server: ' . $absolutePath);
-        }
+        // Resize gambar dulu jika terlalu besar agar tidak OOM di server
+        $rembgInput = $this->prepareResizedInput($absolutePath);
 
-        $inputEscaped  = escapeshellarg($absolutePath);
+        $inputEscaped  = escapeshellarg($rembgInput);
         $outputEscaped = escapeshellarg($editedAbsPath);
         $u2netHome = is_dir('/opt/rembg-models') ? '/opt/rembg-models' : (getenv('HOME') ?: sys_get_temp_dir());
         $cmd       = "U2NET_HOME=" . escapeshellarg($u2netHome) . " $rembgBin i $inputEscaped $outputEscaped 2>&1";
 
         exec($cmd, $output, $exitCode);
+
+        // Hapus file temporary resize jika ada
+        if ($rembgInput !== $absolutePath && file_exists($rembgInput)) {
+            @unlink($rembgInput);
+        }
 
         if ($exitCode !== 0 || !file_exists($editedAbsPath)) {
             $detail = implode(' ', $output);
@@ -64,6 +75,38 @@ class RemoveBackgroundService
         ]);
 
         return $image->fresh();
+    }
+
+    private function prepareResizedInput(string $absolutePath): string
+    {
+        [$origW, $origH] = @getimagesize($absolutePath) ?: [0, 0];
+
+        if ($origW <= self::MAX_REMBG_SIZE && $origH <= self::MAX_REMBG_SIZE) {
+            return $absolutePath;
+        }
+
+        // Hitung ukuran baru dengan mempertahankan aspect ratio
+        $ratio  = min(self::MAX_REMBG_SIZE / $origW, self::MAX_REMBG_SIZE / $origH);
+        $newW   = (int) round($origW * $ratio);
+        $newH   = (int) round($origH * $ratio);
+
+        $tmpPath = sys_get_temp_dir() . '/rembg_input_' . uniqid() . '.jpg';
+
+        $src = imagecreatefromjpeg($absolutePath)
+            ?? imagecreatefrompng($absolutePath)
+            ?? imagecreatefromwebp($absolutePath);
+
+        if (!$src) {
+            return $absolutePath;
+        }
+
+        $dst = imagecreatetruecolor($newW, $newH);
+        imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
+        imagejpeg($dst, $tmpPath, 92);
+        imagedestroy($src);
+        imagedestroy($dst);
+
+        return $tmpPath;
     }
 
     private function findRembg(): string
