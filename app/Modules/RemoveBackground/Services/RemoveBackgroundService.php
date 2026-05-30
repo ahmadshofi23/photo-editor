@@ -16,8 +16,8 @@ class RemoveBackgroundService
         private readonly HistoryService $historyService
     ) {}
 
-    // Maksimal panjang sisi gambar sebelum diproses rembg (hemat RAM)
-    private const MAX_REMBG_SIZE = 1500;
+    // Maksimal panjang sisi gambar sebelum diproses rembg (hemat RAM di Railway)
+    private const MAX_REMBG_SIZE = 800;
 
     public function remove(Image $image, RemoveBackgroundDTO $dto): Image
     {
@@ -85,28 +85,38 @@ class RemoveBackgroundService
             return $absolutePath;
         }
 
-        // Hitung ukuran baru dengan mempertahankan aspect ratio
-        $ratio  = min(self::MAX_REMBG_SIZE / $origW, self::MAX_REMBG_SIZE / $origH);
-        $newW   = (int) round($origW * $ratio);
-        $newH   = (int) round($origH * $ratio);
-
         $tmpPath = sys_get_temp_dir() . '/rembg_input_' . uniqid() . '.jpg';
+        $size    = self::MAX_REMBG_SIZE . 'x' . self::MAX_REMBG_SIZE;
 
-        $src = imagecreatefromjpeg($absolutePath)
-            ?? imagecreatefrompng($absolutePath)
-            ?? imagecreatefromwebp($absolutePath);
+        // Pakai ImageMagick (convert) — jauh lebih hemat RAM dari PHP GD untuk gambar besar
+        $cmd    = 'convert ' . escapeshellarg($absolutePath) . ' -resize ' . escapeshellarg($size) . '\\> -quality 92 ' . escapeshellarg($tmpPath) . ' 2>&1';
+        $output = [];
+        $exit   = -1;
+        exec($cmd, $output, $exit);
+
+        if ($exit === 0 && file_exists($tmpPath)) {
+            return $tmpPath;
+        }
+
+        // Fallback ke PHP GD jika ImageMagick tidak tersedia
+        $src = @imagecreatefromjpeg($absolutePath)
+            ?: @imagecreatefrompng($absolutePath)
+            ?: @imagecreatefromwebp($absolutePath);
 
         if (!$src) {
             return $absolutePath;
         }
 
-        $dst = imagecreatetruecolor($newW, $newH);
+        $ratio = min(self::MAX_REMBG_SIZE / $origW, self::MAX_REMBG_SIZE / $origH);
+        $newW  = (int) round($origW * $ratio);
+        $newH  = (int) round($origH * $ratio);
+        $dst   = imagecreatetruecolor($newW, $newH);
         imagecopyresampled($dst, $src, 0, 0, 0, 0, $newW, $newH, $origW, $origH);
         imagejpeg($dst, $tmpPath, 92);
         imagedestroy($src);
         imagedestroy($dst);
 
-        return $tmpPath;
+        return file_exists($tmpPath) ? $tmpPath : $absolutePath;
     }
 
     private function findRembg(): string

@@ -22,6 +22,10 @@ class RemoveBackgroundController extends Controller
 
     public function process(Request $request)
     {
+        // rembg butuh waktu dan RAM lebih untuk proses AI
+        ini_set('max_execution_time', '180');
+        ini_set('memory_limit', '512M');
+
         $request->validate([
             'image_id' => 'required|exists:images,id',
         ]);
